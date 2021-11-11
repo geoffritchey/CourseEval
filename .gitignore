@@ -1,0 +1,6 @@
+venv
+build.py
+*~
+*.swp
+.idea
+__pycache__
