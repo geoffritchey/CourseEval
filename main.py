@@ -230,3 +230,45 @@ if __name__ == '__main__':
                 last_name = row[4]
                 email = row[5]
                 print(",".join((person_identifier, section_identifier, status, first_name, last_name, email)), file=f)
+
+
+
+            instructor_uri = "{0}ds/campusnexus/StudentCourses?$expand=ClassSection($select=Id)," \
+                          "ClassSection($expand=Instructor($select=StaffId)," \
+                          "Instructor($expand=Staff($select=FirstName,LastName,EmailAddress)))" \
+                          "&$filter=EndDate gt {1} and StartDate le {2}" \
+                              "&$select=StudentId&$apply=groupby((ClassSection/Instructor/StaffId))" \
+                              "".format(root_uri, now.strftime("%Y-%m-%d"),
+                                        (now + datetime.timedelta(weeks=1)).strftime("%Y-%m-%d"))
+
+            print(instructor_uri)
+            r = s.get(instructor_uri)
+            r.raise_for_status()
+
+            # result = r.json()
+            result = json.loads(r.text)
+            for child in result.get("value"):
+                print(child)
+                mem_conn.execute("insert into Instructors(PersonIdentifier, SectionIdentifier, FirstName, LastName, Email, Role) values (?,?,?,?,?,?)", (
+                                     child["ClassSection"]["Instructor"]["StaffId"],
+                                     child["ClassSection"]["Id"],
+                                     child["ClassSection"]["Instructor"]["Staff"]["FirstName"],
+                                     child["ClassSection"]["Instructor"]["Staff"]["LastName"],
+                                     child["ClassSection"]["Instructor"]["Staff"]["EmailAddress"],
+                                    "Primary")
+                                 )
+
+            cur = mem_conn.cursor()
+            cur.execute(
+                "select distinct PersonIdentifier, SectionIdentifier, FirstName, LastName, Email, Role "
+                "from Instructors "
+                "")
+            rows = cur.fetchall()
+            with open('Instructors.csv', 'w') as f:
+                for row in rows:
+                    person_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Staff/" + str(row[0])))
+                    section_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Section/" + str(row[1])))
+                    first_name = row[2]
+                    last_name = row[3]
+                    email = row[4]
+                    print(",".join((person_identifier, section_identifier, first_name, last_name, email)), file=f)
