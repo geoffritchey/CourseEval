@@ -180,11 +180,53 @@ if __name__ == '__main__':
         rows = cur.fetchall()
         with open('AcademicPrograms.csv', 'w') as f:
             for row in rows:
-                program_Identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "StudentCourseStudentEnrollmentPeriods/" + str(row[0])))
-                OrgUnitIdentifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "StudentCourseStudentEnrollmentPeriods/" + str(row[1])))
+                program_Identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Program/" + str(row[0])))
+                OrgUnitIdentifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Org/" + str(row[1])))
                 Name = row[2]
                 Type = row[3]
                 Description = row[4]
-                CourseIdentifiers = list(map(lambda param_x:str(uuid.uuid3(uuid.NAMESPACE_URL, "StudentCourseStudentEnrollmentPeriods/" + str(param_x))),  row[5].split(",")))
+                CourseIdentifiers = list(map(lambda param_x:str(uuid.uuid3(uuid.NAMESPACE_URL, "Course/" + str(param_x))),  row[5].split(",")))
                 print(",".join((program_Identifier, OrgUnitIdentifier, Name, Type, Description, ",".join(CourseIdentifiers))), file=f)
 
+
+
+        enrollments_uri = "{0}ds/campusnexus/StudentCourses?$expand=Student($select=FirstName,LastName,EmailAddress)" \
+                          "&$filter=EndDate gt {1} and StartDate le {2}" \
+                          "&$select=StudentId,ClassSectionId,Status" \
+                       "".format(root_uri, now.strftime("%Y-%m-%d"),
+                                 (now + datetime.timedelta(weeks=1)).strftime("%Y-%m-%d"))
+
+        print(enrollments_uri)
+        r = s.get(enrollments_uri)
+        r.raise_for_status()
+
+        # result = r.json()
+        result = json.loads(r.text)
+        for child in result.get("value"):
+            print(child)
+            mem_conn.execute("insert into Enrollments(PersonIdentifier, SectionIdentifier, Status, FirstName"
+                             ", LastName, Email) values (?,?,?,?,?,?)", (
+                                 child["StudentId"],
+                                 child["ClassSectionId"],
+                                 child["Status"],
+                                 child["Student"]["FirstName"],
+                                 child["Student"]["LastName"],
+                                 child["Student"]["EmailAddress"],
+            )
+                             )
+
+        cur = mem_conn.cursor()
+        cur.execute(
+            "select PersonIdentifier, SectionIdentifier, Status, FirstName, LastName, Email "
+            "from Enrollments "
+            "")
+        rows = cur.fetchall()
+        with open('Enrollments.csv', 'w') as f:
+            for row in rows:
+                person_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Student/" + str(row[0])))
+                section_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Section/" + str(row[1])))
+                status = row[2]
+                first_name = row[3]
+                last_name = row[4]
+                email = row[5]
+                print(",".join((person_identifier, section_identifier, status, first_name, last_name, email)), file=f)
