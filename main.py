@@ -178,12 +178,13 @@ if __name__ == '__main__':
             "group by ProgramIdentifier, OrgUnitIdentifier, Name, ProgramType, Description "
             "")
         rows = cur.fetchall()
-        for row in rows:
-            program_Identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "StudentCourseStudentEnrollmentPeriods/" + str(row[0])))
-            OrgUnitIdentifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "StudentCourseStudentEnrollmentPeriods/" + str(row[1])))
-            Name = row[2]
-            Type = row[3]
-            Description = row[4]
-            CourseIdentifiers = list(map(lambda param_x:str(uuid.uuid3(uuid.NAMESPACE_URL, "StudentCourseStudentEnrollmentPeriods/" + str(param_x))),  row[5].split(",")))
-            print(",".join((program_Identifier, OrgUnitIdentifier, Name, Type, Description, ",".join(CourseIdentifiers))))
+        with open('AcademicPrograms.csv', 'w') as f:
+            for row in rows:
+                program_Identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "StudentCourseStudentEnrollmentPeriods/" + str(row[0])))
+                OrgUnitIdentifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "StudentCourseStudentEnrollmentPeriods/" + str(row[1])))
+                Name = row[2]
+                Type = row[3]
+                Description = row[4]
+                CourseIdentifiers = list(map(lambda param_x:str(uuid.uuid3(uuid.NAMESPACE_URL, "StudentCourseStudentEnrollmentPeriods/" + str(param_x))),  row[5].split(",")))
+                print(",".join((program_Identifier, OrgUnitIdentifier, Name, Type, Description, ",".join(CourseIdentifiers))), file=f)
 

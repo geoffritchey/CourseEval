@@ -4,3 +4,4 @@ build.py
 *.swp
 .idea
 __pycache__
+*.csv
