@@ -1,3 +1,4 @@
+import uuid
 import sqlite3
 import requests
 import json
@@ -141,18 +142,48 @@ if __name__ == '__main__':
         # set authentication header
         s.auth = (build.odata_username, build.odata_password)
 
-        on_campus_uri = "{0}ds/campusnexus/StudentAccountTransactions?$count=true" \
-                        "&$expand=Student($select=StudentNumber),Term($select=EndDate),Term($select=EndDate,StartDate)" \
-                        "&$filter=Term/EndDate gt {1} and Term/StartDate le {2} and Description eq 'Housing'" \
+        programs_uri = "{0}ds/campusnexus/StudentCourseStudentEnrollmentPeriods?$expand=" \
+                            "StudentCourse($select=CourseId), StudentEnrollmentPeriod($select=Id)," \
+                            "StudentEnrollmentPeriod($expand=" \
+                                "ProgramVersion($select=Code,Name),Program($select=Id,Code,Name)," \
+                                "ProgramVersion($expand=Degree($select=Id,GraduateLevel,Name)))&$select=Id" \
+                        "&$filter=StudentCourse/Term/EndDate gt {1} and StudentCourse/Term/StartDate le {2} " \
                         "".format(root_uri, now.strftime("%Y-%m-%d"),
                                   (now + datetime.timedelta(weeks=1)).strftime("%Y-%m-%d"))
 
-        print(on_campus_uri)
-        r = s.get(on_campus_uri)
+        print(programs_uri)
+        r = s.get(programs_uri)
         r.raise_for_status()
 
         # result = r.json()
         result = json.loads(r.text)
         for child in result.get("value"):
-            mem_conn.execute("insert into memChapel values (?,?)", (child['Student']['StudentNumber'], 12))
+            print(child)
+            level = child["StudentEnrollmentPeriod"]["ProgramVersion"]["Degree"]["GraduateLevel"],
+            mem_conn.execute("insert into AcademicPrograms(ProgramIdentifier ,OrgUnitIdentifier ,Name ,ProgramType "
+            ",Description ,CourseIdentifiers) values (?,?,?,?,?,?)", (
+                             child["StudentEnrollmentPeriod"]["Program"]["Id"],
+                             child["StudentEnrollmentPeriod"]["ProgramVersion"]["Degree"]["Id"],
+                             child["StudentEnrollmentPeriod"]["ProgramVersion"]["Code"],
+                             "Undergraduate" if level == 0 else "Graduate",
+                             child["StudentEnrollmentPeriod"]["ProgramVersion"]["Name"],
+                             child["StudentCourse"]["CourseId"]
+            )
+            )
+
+        cur = mem_conn.cursor()
+        cur.execute(
+            "select ProgramIdentifier, OrgUnitIdentifier, Name, ProgramType,Description, group_concat(CourseIdentifiers) "
+            "from AcademicPrograms "
+            "group by ProgramIdentifier, OrgUnitIdentifier, Name, ProgramType, Description "
+            "")
+        rows = cur.fetchall()
+        for row in rows:
+            program_Identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "StudentCourseStudentEnrollmentPeriods/" + str(row[0])))
+            OrgUnitIdentifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "StudentCourseStudentEnrollmentPeriods/" + str(row[1])))
+            Name = row[2]
+            Type = row[3]
+            Description = row[4]
+            CourseIdentifiers = list(map(lambda param_x:str(uuid.uuid3(uuid.NAMESPACE_URL, "StudentCourseStudentEnrollmentPeriods/" + str(param_x))),  row[5].split(",")))
+            print(",".join((program_Identifier, OrgUnitIdentifier, Name, Type, Description, ",".join(CourseIdentifiers))))
 
