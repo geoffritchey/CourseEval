@@ -1,3 +1,4 @@
+import re
 import uuid
 import sqlite3
 import requests
@@ -6,6 +7,7 @@ import datetime
 import build
 
 now = datetime.datetime.now()
+course_name = re.compile(r'(\D+)(\d+)')
 
 if __name__ == '__main__':
     mem_conn = sqlite3.connect(':memory:')
@@ -148,7 +150,7 @@ if __name__ == '__main__':
         # result = r.json()
         result = json.loads(r.text)
         for child in result.get("value"):
-            print(child)
+            # print(child)
             level = child["StudentEnrollmentPeriod"]["ProgramVersion"]["Degree"]["GraduateLevel"],
             mem_conn.execute("insert into AcademicPrograms(ProgramIdentifier ,OrgUnitIdentifier ,Name ,ProgramType "
             ",Description ,CourseIdentifiers) values (?,?,?,?,?,?)", (
@@ -194,7 +196,7 @@ if __name__ == '__main__':
         # result = r.json()
         result = json.loads(r.text)
         for child in result.get("value"):
-            print(child)
+            # print(child)
             mem_conn.execute("insert into Enrollments(PersonIdentifier, SectionIdentifier, Status, FirstName"
                              ", LastName, Email) values (?,?,?,?,?,?)", (
                                  child["StudentId"],
@@ -240,7 +242,7 @@ if __name__ == '__main__':
             # result = r.json()
             result = json.loads(r.text)
             for child in result.get("value"):
-                print(child)
+                # print(child)
                 mem_conn.execute("insert into Instructors(PersonIdentifier, SectionIdentifier, FirstName, LastName, Email, Role) values (?,?,?,?,?,?)", (
                                      child["ClassSection"]["Instructor"]["StaffId"],
                                      child["ClassSection"]["Id"],
@@ -282,7 +284,7 @@ if __name__ == '__main__':
             # result = r.json()
             result = json.loads(r.text)
             for child in result.get("value"):
-                print(child)
+                # print(child)
                 mem_conn.execute("insert into Sections(SectionIdentifier, TermIdentifier, CourseIdentifier"
                                  ", SectionNumber, BeginDate, EndDate, DeliveryMode) values (?,?,?,?,?,?,?)", (
                     child["Id"],
@@ -312,3 +314,96 @@ if __name__ == '__main__':
                     end_date = row[5]
                     delivery_mode = row[6]
                     print(",".join((section_identifier, term_identifier, course_identifier, number, begin_date, end_date, delivery_mode)), file=f)
+
+
+            '''
+                    Course
+            '''
+            course_uri = "{0}ds/campusnexus/StudentCourseStudentEnrollmentPeriods?$expand=StudentCourse($select=Course),StudentCourse($expand=Course($expand=CourseLevel($select=Name)),Course($select=Id,Code,Name)),StudentEnrollmentPeriod($select=ProgramVersion),StudentEnrollmentPeriod($expand=ProgramVersion($select=Degree),ProgramVersion($expand=Degree($select=Id)))" \
+                         "&$filter=StudentCourse/Term/EndDate gt {1} and StudentCourse/Term/StartDate le {2}" \
+                         "&$select=StudentCourse" \
+                           "".format(root_uri, now.strftime("%Y-%m-%d"),
+                                     (now + datetime.timedelta(weeks=1)).strftime("%Y-%m-%d"))
+
+
+
+            print(course_uri)
+            r = s.get(course_uri)
+            r.raise_for_status()
+
+            undergrad = set(['Freshman', 'Junior', 'Senior', 'Sophomore'])
+            # result = r.json()
+            result = json.loads(r.text)
+            for child in result.get("value"):
+                print(child)
+
+                m = course_name.match(child["StudentCourse"]["Course"]["Code"])
+                mem_conn.execute("insert into Course(CourseIdentifier, Subject, CourseNumber, Title,  OrgUnitIdentifier, CourseType) values (?,?,?,?,?,?)", (
+                                     child["StudentCourse"]["Course"]["Id"],
+                                     m.group(1),
+                                     m.group(2),
+                                     child["StudentCourse"]["Course"]["Name"],
+                                     child["StudentEnrollmentPeriod"]["ProgramVersion"]["Degree"]["Id"],
+                                     'Undergraduate' if child["StudentCourse"]["Course"]["CourseLevel"]["Name"] in undergrad else 'Graduate',
+                )
+                                 )
+
+            cur = mem_conn.cursor()
+            cur.execute(
+                "select CourseIdentifier, Subject, CourseNumber, Title,  OrgUnitIdentifier, CourseType "
+                "from Course "
+                "")
+            rows = cur.fetchall()
+            with open('Course.csv', 'w') as f:
+                for row in rows:
+                    course_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Course/" + str(row[0])))
+                    subject = row[1]
+                    number = row[2]
+                    title = row[3]
+                    org_unit_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Org/" + str(row[4])))
+                    course_type = row[5]
+                    print(",".join((course_identifier, subject, number, title, org_unit_identifier, course_type)), file=f)
+
+
+            '''
+                    Terms
+            '''
+            terms_uri = "{0}ds/campusnexus/Terms?$select=Id,Name,StartDate,EndDate" \
+                         "&$filter=EndDate gt {1} and StartDate le {2}" \
+                         "".format(root_uri, now.strftime("%Y-%m-%d"),
+                                   (now + datetime.timedelta(weeks=1)).strftime("%Y-%m-%d"))
+
+
+
+            print(terms_uri)
+            r = s.get(terms_uri)
+            r.raise_for_status()
+
+            # result = r.json()
+            result = json.loads(r.text)
+            for child in result.get("value"):
+                print(child)
+
+                mem_conn.execute("insert into AcademicTerm(TermIdentifier, Name, BeginDate, EndDate, Type) values (?,?,?,?,?)", (
+                    child["Id"],
+                    child["Name"],
+                    child["StartDate"],
+                    child["EndDate"],
+                    "Semester",
+                )
+                                 )
+
+            cur = mem_conn.cursor()
+            cur.execute(
+                "select TermIdentifier, Name, BeginDate, EndDate, Type "
+                "from AcademicTerm "
+                "")
+            rows = cur.fetchall()
+            with open('AcademicTerm.csv', 'w') as f:
+                for row in rows:
+                    term_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Term/" + str(row[0])))
+                    name = row[1]
+                    begin_date = row[2]
+                    end_date = row[3]
+                    type = row[4]
+                    print(",".join((term_identifier, name, begin_date, end_date, type)), file=f)
