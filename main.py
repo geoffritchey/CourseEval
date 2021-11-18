@@ -4,23 +4,10 @@ import requests
 import json
 import datetime
 import build
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 
 now = datetime.datetime.now()
 
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
-
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    print_hi('PyCharm')
-
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
     mem_conn = sqlite3.connect(':memory:')
 
     mem_conn.execute('''
@@ -138,6 +125,9 @@ if __name__ == '__main__':
 
     root_uri = "https://sisclientweb-100542.campusnexus.cloud/"
 
+    '''
+            Academic Programs
+    '''
     with requests.Session() as s:
         # set authentication header
         s.auth = (build.odata_username, build.odata_password)
@@ -188,8 +178,9 @@ if __name__ == '__main__':
                 CourseIdentifiers = list(map(lambda param_x:str(uuid.uuid3(uuid.NAMESPACE_URL, "Course/" + str(param_x))),  row[5].split(",")))
                 print(",".join((program_Identifier, OrgUnitIdentifier, Name, Type, Description, ",".join(CourseIdentifiers))), file=f)
 
-
-
+        '''
+                Enrollments
+        '''
         enrollments_uri = "{0}ds/campusnexus/StudentCourses?$expand=Student($select=FirstName,LastName,EmailAddress)" \
                           "&$filter=EndDate gt {1} and StartDate le {2}" \
                           "&$select=StudentId,ClassSectionId,Status" \
@@ -231,8 +222,9 @@ if __name__ == '__main__':
                 email = row[5]
                 print(",".join((person_identifier, section_identifier, status, first_name, last_name, email)), file=f)
 
-
-
+            '''
+                    Instructors
+            '''
             instructor_uri = "{0}ds/campusnexus/StudentCourses?$expand=ClassSection($select=Id)," \
                           "ClassSection($expand=Instructor($select=StaffId)," \
                           "Instructor($expand=Staff($select=FirstName,LastName,EmailAddress)))" \
@@ -272,3 +264,51 @@ if __name__ == '__main__':
                     last_name = row[3]
                     email = row[4]
                     print(",".join((person_identifier, section_identifier, first_name, last_name, email)), file=f)
+
+            '''
+                    Sections
+            '''
+            sections_uri = "{0}ds/campusnexus/StudentCourses?$expand=ClassSection($select=SectionCode)," \
+                             "ClassSection($expand=DeliveryMethod($select=Code)),Term($select=StartDate,EndDate)" \
+                             "&$select=Id, StudentId, TermId, CourseId" \
+                             "&$filter=EndDate gt {1} and StartDate le {2}"\
+                             "".format(root_uri, now.strftime("%Y-%m-%d"),
+                                       (now + datetime.timedelta(weeks=1)).strftime("%Y-%m-%d"))
+
+            print(sections_uri)
+            r = s.get(sections_uri)
+            r.raise_for_status()
+
+            # result = r.json()
+            result = json.loads(r.text)
+            for child in result.get("value"):
+                print(child)
+                mem_conn.execute("insert into Sections(SectionIdentifier, TermIdentifier, CourseIdentifier"
+                                 ", SectionNumber, BeginDate, EndDate, DeliveryMode) values (?,?,?,?,?,?,?)", (
+                    child["Id"],
+                    child["TermId"],
+                    child["CourseId"],
+                    child["ClassSection"]["SectionCode"],
+                    child["Term"]["StartDate"],
+                    child["Term"]["EndDate"],
+                    "Online" if child["ClassSection"]["DeliveryMethod"]["Code"] == "ONLINE"
+                    else "Face2Face" if child["ClassSection"]["DeliveryMethod"]["Code"] == "ONGOUND" else "Hybrid",
+                )
+                                 )
+
+            cur = mem_conn.cursor()
+            cur.execute(
+                "select SectionIdentifier, TermIdentifier, CourseIdentifier, SectionNumber, BeginDate, EndDate, DeliveryMode "
+                "from Sections "
+                "")
+            rows = cur.fetchall()
+            with open('Sections.csv', 'w') as f:
+                for row in rows:
+                    section_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Section/" + str(row[0])))
+                    term_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Term/" + str(row[1])))
+                    course_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Course/" + str(row[2])))
+                    number = row[3]
+                    begin_date = row[4]
+                    end_date = row[5]
+                    delivery_mode = row[6]
+                    print(",".join((section_identifier, term_identifier, course_identifier, number, begin_date, end_date, delivery_mode)), file=f)
