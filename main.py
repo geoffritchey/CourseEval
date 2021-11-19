@@ -319,7 +319,7 @@ if __name__ == '__main__':
             '''
                     Course
             '''
-            course_uri = "{0}ds/campusnexus/StudentCourseStudentEnrollmentPeriods?$expand=StudentCourse($select=Course),StudentCourse($expand=Course($expand=CourseLevel($select=Name)),Course($select=Id,Code,Name)),StudentEnrollmentPeriod($select=ProgramVersion),StudentEnrollmentPeriod($expand=ProgramVersion($select=Degree),ProgramVersion($expand=Degree($select=Id)))" \
+            course_uri = "{0}ds/campusnexus/StudentCourseStudentEnrollmentPeriods?$expand=StudentCourse($select=Course),StudentCourse($expand=Course($expand=CourseLevel($select=Name)),Course($select=Id,Code,Name)),StudentEnrollmentPeriod($select=ProgramVersion),StudentEnrollmentPeriod($expand=Program($select=Code,Name)),StudentEnrollmentPeriod($expand=ProgramVersion($select=Degree),ProgramVersion($expand=Degree($select=Id)))" \
                          "&$filter=StudentCourse/Term/EndDate gt {1} and StudentCourse/Term/StartDate le {2}" \
                          "&$select=StudentCourse" \
                            "".format(root_uri, now.strftime("%Y-%m-%d"),
