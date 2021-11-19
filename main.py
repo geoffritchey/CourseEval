@@ -335,7 +335,7 @@ if __name__ == '__main__':
             # result = r.json()
             result = json.loads(r.text)
             for child in result.get("value"):
-                print(child)
+                # print(child)
 
                 m = course_name.match(child["StudentCourse"]["Course"]["Code"])
                 mem_conn.execute("insert into Course(CourseIdentifier, Subject, CourseNumber, Title,  OrgUnitIdentifier, CourseType) values (?,?,?,?,?,?)", (
@@ -343,7 +343,7 @@ if __name__ == '__main__':
                                      m.group(1),
                                      m.group(2),
                                      child["StudentCourse"]["Course"]["Name"],
-                                     child["StudentEnrollmentPeriod"]["ProgramVersion"]["Degree"]["Id"],
+                                     child["StudentEnrollmentPeriod"]["Program"]["Code"],
                                      'Undergraduate' if child["StudentCourse"]["Course"]["CourseLevel"]["Name"] in undergrad else 'Graduate',
                 )
                                  )
@@ -364,7 +364,6 @@ if __name__ == '__main__':
                     course_type = row[5]
                     print(",".join((course_identifier, subject, number, title, org_unit_identifier, course_type)), file=f)
 
-
             '''
                     Terms
             '''
@@ -382,7 +381,7 @@ if __name__ == '__main__':
             # result = r.json()
             result = json.loads(r.text)
             for child in result.get("value"):
-                print(child)
+                # print(child)
 
                 mem_conn.execute("insert into AcademicTerm(TermIdentifier, Name, BeginDate, EndDate, Type) values (?,?,?,?,?)", (
                     child["Id"],
@@ -407,3 +406,44 @@ if __name__ == '__main__':
                     end_date = row[3]
                     type = row[4]
                     print(",".join((term_identifier, name, begin_date, end_date, type)), file=f)
+
+            '''
+                    Organizational Units
+            '''
+            org_unit_uri = "{0}ds/campusnexus/StudentCourseStudentEnrollmentPeriods?$expand=StudentEnrollmentPeriod,StudentEnrollmentPeriod($expand=Program($select=Code,Name)),StudentEnrollmentPeriod($select=Program)&$select=StudentEnrollmentPeriod,StudentCourse" \
+                        "&$filter=StudentCourse/Term/EndDate gt {1} and StudentCourse/Term/StartDate le {2}" \
+                        "".format(root_uri, now.strftime("%Y-%m-%d"),
+                                  (now + datetime.timedelta(weeks=1)).strftime("%Y-%m-%d"))
+
+
+
+            print(org_unit_uri)
+            r = s.get(org_unit_uri)
+            r.raise_for_status()
+
+            # result = r.json()
+            result = json.loads(r.text)
+            for child in result.get("value"):
+                print(child)
+
+                mem_conn.execute("insert into OrganizationalUnits(OrgUnitIdentifier, Name, Acronym, Type) values (?,?,?,?)", (
+                    child["StudentEnrollmentPeriod"]["Program"]["Code"],
+                    child["StudentEnrollmentPeriod"]["Program"]["Name"],
+                    child["StudentEnrollmentPeriod"]["Program"]["Code"],
+                    "Department",
+                )
+                                 )
+
+            cur = mem_conn.cursor()
+            cur.execute(
+                "select distinct OrgUnitIdentifier, Name, Acronym, Type "
+                "from OrganizationalUnits "
+                "")
+            rows = cur.fetchall()
+            with open('OrganizationalUnits.csv', 'w') as f:
+                for row in rows:
+                    org_unit_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Org/" + str(row[0])))
+                    name = row[1]
+                    acronym = row[2]
+                    type = row[3]
+                    print(",".join((org_unit_identifier, name, acronym, type)), file=f)
