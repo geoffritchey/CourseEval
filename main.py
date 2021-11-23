@@ -14,6 +14,16 @@ if __name__ == '__main__':
 
     mem_conn.execute('''
 
+    create table AccountData (
+    	PersonIdentifier int
+    	,FirstName TEXT
+    	,LastName  TEXT
+    	,Email  TEXT
+    );
+    ''')
+
+    mem_conn.execute('''
+
     create table OrganizationalUnits (
     	OrgUnitIdentifier int
     	,Name TEXT
@@ -171,6 +181,7 @@ if __name__ == '__main__':
             "")
         rows = cur.fetchall()
         with open('AcademicPrograms.csv', 'w') as f:
+            print(",".join(("ProgramIdentifier", "OrgUnitIdentifier", "Name", "ProgramType,Description", "group_concat(CourseIdentifiers")))
             for row in rows:
                 program_Identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Program/" + str(row[0])))
                 OrgUnitIdentifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Org/" + str(row[1])))
@@ -208,6 +219,9 @@ if __name__ == '__main__':
             )
                              )
 
+
+        ""
+
         cur = mem_conn.cursor()
         cur.execute(
             "select PersonIdentifier, SectionIdentifier, Status, FirstName, LastName, Email "
@@ -215,6 +229,7 @@ if __name__ == '__main__':
             "")
         rows = cur.fetchall()
         with open('Enrollments.csv', 'w') as f:
+            print(",".join(("PersonIdentifier", "SectionIdentifier", "Status", "FirstName", "LastName", "Email")), file=f)
             for row in rows:
                 person_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Student/" + str(row[0])))
                 section_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Section/" + str(row[1])))
@@ -259,8 +274,9 @@ if __name__ == '__main__':
                 "")
             rows = cur.fetchall()
             with open('Instructors.csv', 'w') as f:
+                print(",".join(("PersonIdentifier", "SectionIdentifier", "FirstName", "LastName", "Email", "Role")), file=f)
                 for row in rows:
-                    person_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Staff/" + str(row[0])))
+                    person_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Account/" + str(row[0])))
                     section_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Section/" + str(row[1])))
                     first_name = row[2]
                     last_name = row[3]
@@ -305,6 +321,7 @@ if __name__ == '__main__':
                 "")
             rows = cur.fetchall()
             with open('Sections.csv', 'w') as f:
+                print(",".join(("SectionIdentifier", "TermIdentifier", "CourseIdentifier", "SectionNumber", "BeginDate", "EndDate", "DeliveryMode")), file=f)
                 for row in rows:
                     section_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Section/" + str(row[0])))
                     term_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Term/" + str(row[1])))
@@ -355,6 +372,7 @@ if __name__ == '__main__':
                 "")
             rows = cur.fetchall()
             with open('Course.csv', 'w') as f:
+                print(",".join(("CourseIdentifier", "Subject", "CourseNumber", "Title", "OrgUnitIdentifier", "CourseType")), file=f)
                 for row in rows:
                     course_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Course/" + str(row[0])))
                     subject = row[1]
@@ -399,6 +417,7 @@ if __name__ == '__main__':
                 "")
             rows = cur.fetchall()
             with open('AcademicTerm.csv', 'w') as f:
+                print(",".join(("TermIdentifier", "Name", "BeginDate", "EndDate", "Type")), file=f)
                 for row in rows:
                     term_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Term/" + str(row[0])))
                     name = row[1]
@@ -424,7 +443,7 @@ if __name__ == '__main__':
             # result = r.json()
             result = json.loads(r.text)
             for child in result.get("value"):
-                print(child)
+                # print(child)
 
                 mem_conn.execute("insert into OrganizationalUnits(OrgUnitIdentifier, Name, Acronym, Type) values (?,?,?,?)", (
                     child["StudentEnrollmentPeriod"]["Program"]["Code"],
@@ -447,3 +466,107 @@ if __name__ == '__main__':
                     acronym = row[2]
                     type = row[3]
                     print(",".join((org_unit_identifier, name, acronym, type)), file=f)
+
+            '''
+                    Organizational Units
+            '''
+            org_unit_uri = "{0}ds/campusnexus/StudentCourseStudentEnrollmentPeriods?$expand=StudentEnrollmentPeriod,StudentEnrollmentPeriod($expand=Program($select=Code,Name)),StudentEnrollmentPeriod($select=Program)&$select=StudentEnrollmentPeriod,StudentCourse" \
+                           "&$filter=StudentCourse/Term/EndDate gt {1} and StudentCourse/Term/StartDate le {2}" \
+                           "".format(root_uri, now.strftime("%Y-%m-%d"),
+                                     (now + datetime.timedelta(weeks=1)).strftime("%Y-%m-%d"))
+
+            print(org_unit_uri)
+            r = s.get(org_unit_uri)
+            r.raise_for_status()
+
+            # result = r.json()
+            result = json.loads(r.text)
+            for child in result.get("value"):
+                # print(child)
+
+                mem_conn.execute("insert into OrganizationalUnits(OrgUnitIdentifier, Name, Acronym, Type) values (?,?,?,?)", (
+                    child["StudentEnrollmentPeriod"]["Program"]["Code"],
+                    child["StudentEnrollmentPeriod"]["Program"]["Name"],
+                    child["StudentEnrollmentPeriod"]["Program"]["Code"],
+                    "Department",
+                )
+                                 )
+
+            cur = mem_conn.cursor()
+            cur.execute(
+                "select distinct OrgUnitIdentifier, Name, Acronym, Type "
+                "from OrganizationalUnits "
+                "")
+            rows = cur.fetchall()
+            with open('OrganizationalUnits.csv', 'w') as f:
+                print(",".join(("OrgUnitIdentifier", "Name", "Acronym", "Type")), file=f)
+                for row in rows:
+                    org_unit_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Org/" + str(row[0])))
+                    name = row[1]
+                    acronym = row[2]
+                    type = row[3]
+                    print(",".join((org_unit_identifier, name, acronym, type)), file=f)
+
+            '''
+                    Account Data
+            '''
+            #   students
+            account_uri = "{0}ds/campusnexus/StudentCourses?$select=Student&$expand=Student($select=Id,FirstName,LastName,EmailAddress)&$top=10" \
+                           "&$filter=Term/EndDate gt {1} and Term/StartDate le {2}" \
+                           "".format(root_uri, now.strftime("%Y-%m-%d"),
+                                     (now + datetime.timedelta(weeks=1)).strftime("%Y-%m-%d"))
+
+            print(account_uri)
+            r = s.get(account_uri)
+            r.raise_for_status()
+
+            # result = r.json()
+            result = json.loads(r.text)
+            for child in result.get("value"):
+                # print(child)
+
+                mem_conn.execute("insert into AccountData(PersonIdentifier, FirstName, LastName, Email) values (?,?,?,?)", (
+                    child["Student"]["Id"],
+                    child["Student"]["FirstName"],
+                    child["Student"]["LastName"],
+                    child["Student"]["EmailAddress"],
+                )
+                                 )
+
+            #   instructors
+            account_uri = "{0}ds/campusnexus/StudentCourses?$expand=ClassSection($select=Instructor),ClassSection($expand=Instructor($select=Staff),Instructor($expand=Staff($select=EmailAddress,Person),Staff($expand=Person($select=LastName,FirstName,Id))))" \
+                              "&$filter=EndDate gt {1} and StartDate le {2}" \
+                              "&$select=ClassSection" \
+                              "".format(root_uri, now.strftime("%Y-%m-%d"),
+                                        (now + datetime.timedelta(weeks=1)).strftime("%Y-%m-%d"))
+
+            print(account_uri)
+            r = s.get(account_uri)
+            r.raise_for_status()
+
+            # result = r.json()
+            result = json.loads(r.text)
+            for child in result.get("value"):
+                # print(child)
+                mem_conn.execute("insert into AccountData(PersonIdentifier, FirstName, LastName, Email) values (?,?,?,?)", (
+                    child["ClassSection"]["Instructor"]["Staff"]["Person"]["Id"],
+                    child["ClassSection"]["Instructor"]["Staff"]["Person"]["FirstName"],
+                    child["ClassSection"]["Instructor"]["Staff"]["Person"]["LastName"],
+                    child["ClassSection"]["Instructor"]["Staff"]["EmailAddress"],
+                )
+                                 )
+
+            cur = mem_conn.cursor()
+            cur.execute(
+                "select distinct PersonIdentifier, FirstName, LastName, Email "
+                "from AccountData "
+                "")
+            rows = cur.fetchall()
+            with open('Accounts.csv', 'w') as f:
+                print(",".join(("PersonIdentifier", "FirstName", "LastName", "Email")), file=f)
+                for row in rows:
+                    person_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "Account/" + str(row[0])))
+                    first_name = row[1]
+                    last_name = row[2]
+                    email = row[3]
+                    print(",".join((person_identifier, section_identifier, first_name, last_name, email)), file=f)
