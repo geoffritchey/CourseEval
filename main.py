@@ -456,7 +456,7 @@ create table StudentDemographics (
             "")
         rows = cur.fetchall()
         with open('AcademicPrograms.csv', 'w') as f:
-            print(",".join(("ProgramIdentifier", "OrgUnitIdentifier", "Name", "ProgramType,Description", "CourseIdentifiers")), file=f)
+            print(",".join(("ProgramIdentifier", "OrgUnitIdentifier", "Name", "Type", "Description", "CourseIdentifiers")), file=f)
             for row in rows:
                 program_Identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "//lcu.edu/Program/" + str(row[0])))
                 OrgUnitIdentifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "//lcu.edu/Org/" + str(row[1])))
@@ -471,7 +471,7 @@ create table StudentDemographics (
         '''
         enrollments_uri = "{0}ds/campusnexus/StudentCourses?$expand=Student($select=FirstName,LastName,EmailAddress)" \
                           "&$filter=EndDate gt {1} and StartDate le {2}" \
-                          "&$select=StudentId,ClassSectionId,Status" \
+                          "&$select=StudentId,ClassSectionId,Status,DropDate" \
                        "".format(root_uri, now.strftime("%Y-%m-%d"),
                                  (now + datetime.timedelta(weeks=1)).strftime("%Y-%m-%d"))
 
@@ -484,13 +484,14 @@ create table StudentDemographics (
         for child in result.get("value"):
             # print(child)
             mem_conn.execute("insert into Enrollments(PersonIdentifier, SectionIdentifier, Status, FirstName"
-                             ", LastName, Email) values (?,?,?,?,?,?)", (
+                             ", LastName, Email, StatusChangeDate) values (?,?,?,?,?,?,?)", (
                                  child["StudentId"],
                                  child["ClassSectionId"],
                                  child["Status"],
                                  child["Student"]["FirstName"],
                                  child["Student"]["LastName"],
                                  child["Student"]["EmailAddress"],
+                                 child["DropDate"],
             )
                              )
 
@@ -499,12 +500,12 @@ create table StudentDemographics (
 
         cur = mem_conn.cursor()
         cur.execute(
-            "select PersonIdentifier, SectionIdentifier, Status, FirstName, LastName, Email "
+            "select PersonIdentifier, SectionIdentifier, Status, FirstName, LastName, Email, StatusChangeDate "
             "from Enrollments "
             "")
         rows = cur.fetchall()
         with open('Enrollments.csv', 'w') as f:
-            print(",".join(("PersonIdentifier", "SectionIdentifier", "Status", "FirstName", "LastName", "Email")), file=f)
+            print(",".join(("PersonIdentifier", "SectionIdentifier", "Status", "FirstName", "LastName", "Email", "StatusChangeDate")), file=f)
             for row in rows:
                 person_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "//lcu.edu/Student/" + str(row[0])))
                 section_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "//lcu.edu/Section/" + str(row[1])))
@@ -512,7 +513,13 @@ create table StudentDemographics (
                 first_name = row[3]
                 last_name = row[4]
                 email = row[5]
-                print(",".join((person_identifier, section_identifier, status, first_name, last_name, email)), file=f)
+                statusChangeDate = row[6]
+                if statusChangeDate is None:
+                    status = "Active"
+                    statusChangeDate = ""
+                else:
+                    status = "Dropped"
+                print(",".join((person_identifier, section_identifier, status, first_name, last_name, email, statusChangeDate)), file=f)
 
             '''
                     Instructors
@@ -565,7 +572,8 @@ create table StudentDemographics (
                     first_name = row[2]
                     last_name = row[3]
                     email = row[4]
-                    print(",".join((person_identifier, section_identifier, first_name, last_name, email)), file=f)
+                    role = row[5]
+                    print(",".join((person_identifier, section_identifier, first_name, last_name, email, role)), file=f)
 
 
             cur = mem_conn.cursor()
@@ -622,7 +630,7 @@ create table StudentDemographics (
                 "")
             rows = cur.fetchall()
             with open('Sections.csv', 'w') as f:
-                print(",".join(("SectionIdentifier", "TermIdentifier", "CourseIdentifier", "SectionNumber", "BeginDate", "EndDate", "DeliveryMode")), file=f)
+                print(",".join(("SectionIdentifier", "TermIdentifier", "CourseIdentifier", "Number", "BeginDate", "EndDate", "DeliveryMode")), file=f)
                 for row in rows:
                     section_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "//lcu.edu/Section/" + str(row[0])))
                     term_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "//lcu.edu/Term/" + str(row[1])))
@@ -673,7 +681,7 @@ create table StudentDemographics (
                 "")
             rows = cur.fetchall()
             with open('Course.csv', 'w') as f:
-                print(",".join(("CourseIdentifier", "Subject", "CourseNumber", "Title", "OrgUnitIdentifier", "CourseType")), file=f)
+                print(",".join(("CourseIdentifier", "Subject", "Number", "Title", "OrgUnitIdentifier", "Type")), file=f)
                 for row in rows:
                     course_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "//lcu.edu/Course/" + str(row[0])))
                     subject = row[1]
@@ -718,14 +726,14 @@ create table StudentDemographics (
                 "")
             rows = cur.fetchall()
             with open('AcademicTerm.csv', 'w') as f:
-                print(",".join(("TermIdentifier", "Name", "BeginDate", "EndDate", "Type")), file=f)
+                print(",".join(("TermIdentifier", "Name", "BeginDate", "EndDate", "ParentIdentifier", "Type")), file=f)
                 for row in rows:
                     term_identifier = str(uuid.uuid3(uuid.NAMESPACE_URL, "//lcu.edu/Term/" + str(row[0])))
                     name = row[1]
                     begin_date = row[2]
                     end_date = row[3]
                     type = row[4]
-                    print(",".join((term_identifier, name, begin_date, end_date, type)), file=f)
+                    print(",".join((term_identifier, name, begin_date, end_date, "", type)), file=f)
 
             '''
                     Organizational Units
